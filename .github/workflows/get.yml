@@ -5,14 +5,12 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest   # 必须使用 Windows Runner
+    runs-on: windows-latest
 
     steps:
-      # ---------- 检出仓库（如果你把驱动包放在仓库里） ----------
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ---------- 下载 Google Drive 的 ESD 文件 ----------
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -23,59 +21,43 @@ jobs:
 
       - name: Download ESD from Google Drive
         run: |
-          # 你提供的 Google Drive 文件 ID：1flsevEu4Yki-E8qPb_u5zJWJO-L9X2Ch
           gdown 1flsevEu4Yki-E8qPb_u5zJWJO-L9X2Ch -O install.esd
-        # 如果该文件实际不是 ESD，请修改输出文件名并调整后续步骤
 
-      # ---------- 下载并解压 XiaoMi9 驱动包 ----------
       - name: Download XiaoMi9 Drivers
         run: |
           curl -L -o drivers.7z "https://github.com/qaz6750/XiaoMi9-Drivers/releases/download/2.0.0/XiaoMi9-Drivers-Desktop.7z"
 
       - name: Extract Drivers
         run: |
-          # 使用 7-Zip 解压（windows-latest 自带 7z）
           7z x drivers.7z -oDrivers -y
-        # 解压后，offline.bat 应该在 Drivers 目录下
 
-      # ---------- 查看 ESD 镜像索引 ----------
       - name: Show ESD info
         run: dism /Get-WimInfo /WimFile:install.esd
 
-      # ---------- 将 ESD 转换为 WIM（默认使用索引 1） ----------
       - name: Convert ESD to WIM
         run: |
           dism /Export-Image /SourceImageFile:install.esd /SourceIndex:1 /DestinationImageFile:install.wim /Compress:max /CheckIntegrity
-        # 若需其他索引，请修改 /SourceIndex:1
 
-      # ---------- 挂载 WIM ----------
       - name: Mount WIM
         run: |
           mkdir C:\Mount
           dism /Mount-Wim /WimFile:install.wim /Index:1 /MountDir:C:\Mount
 
-      # ---------- 映射虚拟盘符 X: ----------
       - name: Map mount dir to drive letter
         run: subst X: C:\Mount
 
-      # ---------- 运行 offline.bat 并自动输入盘符 ----------
       - name: Run offline.bat with drive letter
         shell: cmd
         run: |
-          # 进入解压后的驱动目录
           cd Drivers
-          # 通过管道自动输入盘符 X: 给 offline.bat
           echo X: | .\offline.bat
 
-      # ---------- 删除虚拟盘符 ----------
       - name: Remove drive mapping
         run: subst X: /D
 
-      # ---------- 提交更改并卸载 WIM ----------
       - name: Commit and unmount
         run: dism /Unmount-Wim /MountDir:C:\Mount /Commit
 
-      # ---------- 上传修改后的 WIM ----------
       - name: Upload modified WIM
         uses: actions/upload-artifact@v4
         with:

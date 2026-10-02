@@ -28,15 +28,12 @@ jobs:
 
       - name: Extract ESD from split zip
         run: |
-          # 7z will automatically combine .001 .002 .003
           7z x "26300.9550.260920-1158.26H2_GE_RELEASE_SVC_PROD3_CLIENTMULTI_A64FRE_ZH-CN_parts.zip.001" -y
-          # 查找解压出来的 esd 文件
           $esd = Get-ChildItem -Recurse -Filter "*.esd" | Select-Object -First 1
           if (-not $esd) { throw "No .esd file found after extraction" }
           Write-Host "Found ESD: $($esd.FullName) ($([math]::Round($esd.Length/1GB, 2)) GB)"
           Move-Item $esd.FullName -Destination install.esd -Force
-          # 清理分卷节省空间
-          Remove-Item "26300.9550.260920-1158.26H2_GE_RELEASE_SVC_PROD3_CLIENTMULTI_A64FRE_ZH-CN_parts.zip.*" -Force
+          Remove-Item "26300.9550.260920-1158.26H2_GE_RELEASE_SVC_PROD3_CLIENTMULTI_A64FRE_ZH-CN_parts.zip.*" -Force -ErrorAction SilentlyContinue
           Get-Item install.esd | Format-List Name, Length
 
       - name: Download XiaoMi9 Drivers
@@ -46,7 +43,21 @@ jobs:
       - name: Extract Drivers
         run: |
           7z x drivers.7z -oDrivers -y
-          Get-ChildItem Drivers -Recurse | Select-Object -First 20 FullName
+          Write-Host "=== Drivers root contents ==="
+          Get-ChildItem Drivers | Format-Table Name, Mode
+          Write-Host "=== Looking for OfflineUpdater ==="
+          Get-ChildItem Drivers -Recurse -Filter "*Offline*" | Format-Table FullName
+
+      - name: Install .NET 8 Desktop Runtime
+        run: |
+          # OfflineUpdater requires .NET 8 Desktop Runtime
+          winget install --id Microsoft.DotNet.DesktopRuntime.8 --accept-package-agreements --accept-source-agreements --silent || \
+          choco install dotnet-8.0-desktopruntime -y || \
+          Write-Host "Trying direct download..."
+          # fallback: direct installer
+          curl.exe -L -o dotnet-desktop-runtime.exe "https://aka.ms/dotnet/8.0/windowsdesktop-runtime-win-x64.exe"
+          Start-Process -FilePath ".\dotnet-desktop-runtime.exe" -ArgumentList "/install","/quiet","/norestart" -Wait -NoNewWindow
+          Write-Host "dotnet installed"
 
       - name: Show ESD info
         run: dism /Get-WimInfo /WimFile:install.esd
@@ -57,17 +68,22 @@ jobs:
 
       - name: Mount WIM
         run: |
-          mkdir C:\Mount
+          New-Item -ItemType Directory -Path C:\Mount -Force | Out-Null
           dism /Mount-Wim /WimFile:install.wim /Index:1 /MountDir:C:\Mount
 
       - name: Map mount dir to drive letter
         run: 'subst X: C:\Mount'
 
-      - name: Run offline.bat with drive letter
+      - name: Run OfflineUpdater.cmd with drive letter
         shell: cmd
         run: |
-          cd Drivers
-          echo X: | .\offline.bat
+          cd /d Drivers
+          echo Listing current directory:
+          dir /b
+          echo.
+          echo Running OfflineUpdater.cmd with X:
+          echo X: | OfflineUpdater.cmd
+          echo Exit code: %ERRORLEVEL%
 
       - name: Remove drive mapping
         run: 'subst X: /D'

@@ -1,7 +1,7 @@
 name: Inject XiaoMi9 Drivers into ESD
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: {}
 
 jobs:
   build:
@@ -44,7 +44,7 @@ jobs:
           dism /Mount-Wim /WimFile:install.wim /Index:1 /MountDir:C:\Mount
 
       - name: Map mount dir to drive letter
-        run: subst X: C:\Mount
+        run: 'subst X: C:\Mount'
 
       - name: Run offline.bat with drive letter
         shell: cmd
@@ -53,7 +53,7 @@ jobs:
           echo X: | .\offline.bat
 
       - name: Remove drive mapping
-        run: subst X: /D
+        run: 'subst X: /D'
 
       - name: Commit and unmount
         run: dism /Unmount-Wim /MountDir:C:\Mount /Commit

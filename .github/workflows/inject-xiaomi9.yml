@@ -11,36 +11,42 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install gdown
-        run: pip install gdown
-
-      - name: Download ESD from Google Drive
+      - name: Download ESD split parts from GitHub Release
         run: |
-          # 尝试多种方式下载，绕过常见限制
-          gdown --fuzzy "https://drive.google.com/file/d/1flsevEu4Yki-E8qPb_u5zJWJO-L9X2Ch/view" -O install.esd --no-cookies || \
-          gdown 1flsevEu4Yki-E8qPb_u5zJWJO-L9X2Ch -O install.esd --fuzzy || \
-          gdown "https://drive.google.com/uc?id=1flsevEu4Yki-E8qPb_u5zJWJO-L9X2Ch" -O install.esd --fuzzy
-          
-          if (Test-Path install.esd) {
-            Write-Host "ESD downloaded successfully"
-            Get-Item install.esd | Select-Object Name, Length
-          } else {
-            Write-Error "Failed to download ESD. Google Drive quota may be exceeded."
-            exit 1
+          $base = "https://github.com/ArKT-7/woawin/releases/download/2026-09-29_211725"
+          $files = @(
+            "26300.9550.260920-1158.26H2_GE_RELEASE_SVC_PROD3_CLIENTMULTI_A64FRE_ZH-CN_parts.zip.001",
+            "26300.9550.260920-1158.26H2_GE_RELEASE_SVC_PROD3_CLIENTMULTI_A64FRE_ZH-CN_parts.zip.002",
+            "26300.9550.260920-1158.26H2_GE_RELEASE_SVC_PROD3_CLIENTMULTI_A64FRE_ZH-CN_parts.zip.003"
+          )
+          foreach ($f in $files) {
+            Write-Host "Downloading $f ..."
+            curl.exe -L --retry 5 --retry-delay 10 -o $f "$base/$f"
+            if (-not (Test-Path $f)) { throw "Failed to download $f" }
           }
+          Get-ChildItem *.zip.* | Format-Table Name, Length
+
+      - name: Extract ESD from split zip
+        run: |
+          # 7z will automatically combine .001 .002 .003
+          7z x "26300.9550.260920-1158.26H2_GE_RELEASE_SVC_PROD3_CLIENTMULTI_A64FRE_ZH-CN_parts.zip.001" -y
+          # 查找解压出来的 esd 文件
+          $esd = Get-ChildItem -Recurse -Filter "*.esd" | Select-Object -First 1
+          if (-not $esd) { throw "No .esd file found after extraction" }
+          Write-Host "Found ESD: $($esd.FullName) ($([math]::Round($esd.Length/1GB, 2)) GB)"
+          Move-Item $esd.FullName -Destination install.esd -Force
+          # 清理分卷节省空间
+          Remove-Item "26300.9550.260920-1158.26H2_GE_RELEASE_SVC_PROD3_CLIENTMULTI_A64FRE_ZH-CN_parts.zip.*" -Force
+          Get-Item install.esd | Format-List Name, Length
 
       - name: Download XiaoMi9 Drivers
         run: |
-          curl -L -o drivers.7z "https://github.com/qaz6750/XiaoMi9-Drivers/releases/download/2.0.0/XiaoMi9-Drivers-Desktop.7z"
+          curl.exe -L -o drivers.7z "https://github.com/qaz6750/XiaoMi9-Drivers/releases/download/2.0.0/XiaoMi9-Drivers-Desktop.7z"
 
       - name: Extract Drivers
         run: |
           7z x drivers.7z -oDrivers -y
+          Get-ChildItem Drivers -Recurse | Select-Object -First 20 FullName
 
       - name: Show ESD info
         run: dism /Get-WimInfo /WimFile:install.esd
@@ -74,3 +80,4 @@ jobs:
         with:
           name: modified-install
           path: install.wim
+          retention-days: 5

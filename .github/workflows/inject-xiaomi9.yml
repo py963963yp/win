@@ -1,6 +1,6 @@
 name: Inject XiaoMi9 Drivers into ESD
 
-on:
+"on":
   workflow_dispatch: {}
 
 jobs:

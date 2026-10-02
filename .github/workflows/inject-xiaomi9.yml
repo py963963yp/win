@@ -21,7 +21,18 @@ jobs:
 
       - name: Download ESD from Google Drive
         run: |
-          gdown 1flsevEu4Yki-E8qPb_u5zJWJO-L9X2Ch -O install.esd
+          # 尝试多种方式下载，绕过常见限制
+          gdown --fuzzy "https://drive.google.com/file/d/1flsevEu4Yki-E8qPb_u5zJWJO-L9X2Ch/view" -O install.esd --no-cookies || \
+          gdown 1flsevEu4Yki-E8qPb_u5zJWJO-L9X2Ch -O install.esd --fuzzy || \
+          gdown "https://drive.google.com/uc?id=1flsevEu4Yki-E8qPb_u5zJWJO-L9X2Ch" -O install.esd --fuzzy
+          
+          if (Test-Path install.esd) {
+            Write-Host "ESD downloaded successfully"
+            Get-Item install.esd | Select-Object Name, Length
+          } else {
+            Write-Error "Failed to download ESD. Google Drive quota may be exceeded."
+            exit 1
+          }
 
       - name: Download XiaoMi9 Drivers
         run: |
